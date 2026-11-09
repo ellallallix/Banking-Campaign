@@ -1,8 +1,12 @@
 # Ciblage d'une campagne bancaire
 
-**Projet personnel de statistiques et de machine learning.** L'objectif est de sélectionner les **20 % de clients à contacter en priorité**, pour retrouver le plus de souscripteurs possible dans cette sélection.
+**Objectif :** sélectionner les **20 % de clients à contacter en priorité**, pour retrouver le plus de souscripteurs possible.
 
-Je compare un modèle aléatoire, deux SVM et deux régressions logistiques codées manuellement. Mon choix final est la **régression logistique adaptée sur les données non simplifiées**.
+**Résultat final :** la régression logistique adaptée, retenue sur les données non simplifiées, sélectionne **568 souscripteurs parmi 1 194 clients** sur le jeu de test : **47,57 % de précision et 24,85 % de rappel**.
+
+**Démarche et apport personnel :** analyse et nettoyage des données, découpage chronologique **70 % / 15 % / 15 %**, implémentation manuelle de deux régressions logistiques — classique et adaptée avec un coût limité aux 20 % les mieux classés — puis comparaison avec deux SVM et une référence aléatoire estimée sur plusieurs tirages.
+
+**Limite principale :** la proportion de souscripteurs varie fortement entre les périodes. Les résultats décrivent la période évaluée et ne garantissent pas les mêmes performances sur de futurs clients.
 
 ## Données
 
