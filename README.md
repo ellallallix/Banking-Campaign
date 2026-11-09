@@ -97,7 +97,7 @@ L'exploration descriptive a porté sur l'ensemble du fichier ; les scores prédi
 
 | Modèle | Paramètres explorés par CV |
 |---|---|
-| Aléatoire | Sélection uniforme de 20 % des positions, sans remise |
+| Aléatoire | Sélection uniforme de 20 % des positions, sans remise ; évaluation sur 100 graines |
 | SVM RBF | `C` et `gamma` : `[0.01, 0.1, 1, 10]` ; `class_weight="balanced"` |
 | SVM polynomial | `degree` : `[2, 3, 4]` ; `coef0` : `[10, 20]` ; `class_weight="balanced"` |
 | Logistique classique | `alpha` : `[0.005, 0.01, 0.1, 0.5]` ; `n_iterations` : `[500, 1000, 2500, 5000]` |
@@ -127,6 +127,10 @@ $$
 \qquad
 \text{Rappel}=\frac{\text{souscripteurs sélectionnés}}{\text{tous les souscripteurs de l'ensemble évalué}}.
 $$
+
+La référence aléatoire est évaluée sur **100 tirages, avec les graines 0 à 99**. Chaque tirage sélectionne exactement $k=\lceil0{,}2n\rceil$ clients, sans remise. Pour la précision et le rappel, les comparatifs affichent la **moyenne ± l'écart-type** des 100 scores, calculés séparément sur chaque ensemble. L'écart-type utilise `ddof=1`.
+
+`predict_random(X, seed=42)` conserve le tirage historique quand aucune graine n'est précisée ; une autre graine produit un autre tirage. Les **matrices de confusion aléatoires gardent le tirage de référence de graine 42**, indiqué sur les figures. Les prédictions ne sont jamais moyennées pour fabriquer une sélection.
 
 Dans les matrices de confusion, « Oui » sur l'axe horizontal signifie **client sélectionné**. Les figures ci-dessous présentent à la fois l'entraînement et la validation.
 
@@ -187,22 +191,30 @@ Je cherche à mesurer :
 1. Le gain de chaque modèle appris face à l'aléatoire, dans chacune des deux versions.
 2. Le gain de la régression adaptée simplifiée face à la non simplifiée, sur les mêmes clients.
 
-Le **gain est la différence de précision en points de pourcentage**. Les prédictions sont recalculées depuis les données et modèles sauvegardés, avec le même quota pour chaque paire de sélections. Les **p-values sont présentées en pourcentage**.
+Le **gain est la précision du modèle moins la précision moyenne des 100 tirages aléatoires**, en points de pourcentage. Les prédictions sont recalculées depuis les données et modèles sauvegardés, sur les mêmes clients et avec le même quota. Les **p-values brutes sont présentées en pourcentage**.
 
 ![Gains de précision, p-values et choix final](Resultats/Statistiques/Tableau_recapitulatif.png)
 
 ### Calculs utilisés
 
-Sous $H_0$, il n'y a pas de gain positif face à la référence ; sous $H_1$, le gain est positif. Pour chaque vrai souscripteur, $d$ vaut +1 si seul le modèle le retrouve, −1 si seule la référence le retrouve, et 0 sinon.
+Pour chaque graine $i$, je calcule le gain $g_i=P_{\mathrm{modèle}}-P_{\mathrm{aléatoire},i}$. Avec $B=100$ tirages, je calcule sa moyenne $\bar g$, son écart-type $s_g$ et son erreur standard :
 
-Avec $M$ vrais souscripteurs et $k$ clients sélectionnés, le gain vaut $(M/k)\bar d$ et son erreur standard approchée vaut $(M/k)s_d/\sqrt M$, où $\bar d$ et $s_d$ sont la moyenne et l'écart-type des différences. Ces valeurs sont multipliées par 100 pour les exprimer en points.
+$$
+\bar g=\frac{1}{B}\sum_i g_i,
+\qquad
+s_g=\sqrt{\frac{\sum_i(g_i-\bar g)^2}{B-1}},
+\qquad
+SE=\frac{s_g}{\sqrt B}.
+$$
 
-La p-value repose sur le test binomial exact des désaccords, ou test de McNemar unilatéral. Une correction de Holm est appliquée aux **neuf comparaisons**, au seuil de **5 %**. Les intervalles à 95 % restent approximatifs et calculés séparément pour chaque comparaison.
+Pour les comparaisons à l'aléatoire, je conserve l'approximation normale : sous l'hypothèse d'un gain moyen nul, la p-value unilatérale vaut $1-\Phi(\bar g/SE)$. L'intervalle approché est $\bar g\pm1{,}96\,SE$. La SE et cet intervalle décrivent la variabilité de la moyenne liée aux graines, pour le modèle et les clients fixés ; ils ne mesurent pas l'incertitude sur de nouveaux clients. Multiplier les tirages réduit cette SE.
+
+La comparaison entre les deux versions adaptées reste inchangée : pour chaque vrai souscripteur, $d$ vaut +1 si seule la simplifiée le retrouve, −1 si seule l'initiale le retrouve, et 0 sinon. Avec $M$ vrais souscripteurs et $k$ clients sélectionnés, le gain vaut $(M/k)\bar d$ et sa SE approchée vaut $(M/k)s_d/\sqrt M$. La p-value repose ici sur le test binomial exact des désaccords, ou test de McNemar unilatéral.
 
 <details>
 <summary>Voir les calculs détaillés et les formules</summary>
 
-![Calculs statistiques : désaccords, moyenne, écart-type, erreur standard, intervalles et p-values](Resultats/Statistiques/Calculs_statistiques.png)
+![Calculs statistiques : moyenne, écart-type, erreur standard, intervalles et p-values](Resultats/Statistiques/Calculs_statistiques.png)
 
 </details>
 

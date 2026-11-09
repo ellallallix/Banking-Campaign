@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import binomtest, norm
 from joblib import load
+from Random import evaluer_aleatoire
 
 
 # %% Comparaisons appariees, sur les vrais oui des memes clients
@@ -46,12 +47,35 @@ def comparer_selections(y, choix, reference):
     }
 
 
-def corriger_holm(p_values):
-    p = np.asarray(p_values, dtype=float)
-    ordre = np.argsort(p, kind="stable")
-    corrigees = np.empty_like(p)
-    corrigees[ordre] = np.minimum(1, np.maximum.accumulate(p[ordre] * (len(p) - np.arange(len(p)))))
-    return corrigees
+def comparer_aleatoire(y, choix, reference):
+    """Gain moyen et SE sur les graines ; approximation normale deja utilisee."""
+    y, choix = np.asarray(y), np.asarray(choix)
+    k = int(choix.sum())
+    if y.shape != choix.shape or k != reference["selectionnes"]:
+        raise ValueError("Utiliser les memes clients et le meme quota que les tirages.")
+    retrouves = int(np.dot(y, choix))
+    precision = retrouves / k
+    rappel = retrouves / y.sum() if y.sum() else 0.0
+    gain = precision - reference["precision_moyenne"]
+    # Chaque gain = precision du modele - precision du tirage.
+    ecart_type = reference["precision_ecart_type"]
+    se = ecart_type / np.sqrt(reference["nb_tirages"])
+    p = (float(norm.sf(gain / se)) if se > 0 else
+         (1.0 if gain == 0 else None))
+    marge = float(norm.ppf(.975) * se)
+    return {
+        "clients": len(y), "oui": int(y.sum()), "selectionnes": k,
+        "nb_tirages": reference["nb_tirages"], "oui_retrouves": retrouves,
+        "precision_choix": precision, "precision_reference": reference["precision_moyenne"],
+        "precision_reference_ecart_type": ecart_type,
+        "rappel_reference": reference["rappel_moyen"],
+        "rappel_reference_ecart_type": reference["rappel_ecart_type"],
+        "gain_rappel": rappel - reference["rappel_moyen"], "gain_precision": gain,
+        "ecart_type_gain_precision": ecart_type,
+        "erreur_standard_gain_precision": float(se),
+        "ic95_bas": gain - marge, "ic95_haut": gain + marge,
+        "p_normale_approx": p, "p_brute": p,
+    }
 
 
 # %% Analyse de validation des modeles deja entraines, sans fit
@@ -72,18 +96,18 @@ def analyser_validation(
         "logistique": "Logistique classique", "logistique_adaptee": "Logistique adaptee",
     }
     lignes = []
-    # Chaque modele est compare au modele aleatoire deja defini.
+    # Chaque modele est compare a la moyenne des 100 tirages aleatoires.
     for version, resultats, X, y in (
         ("Initiale", initial, X_val, y_val),
         ("Simplifiee", simplifie, X_simple, y_simple),
     ):
-        reference = predictions_top20(resultats["aleatoire"]["modele"], X, aleatoire=True)
+        reference = evaluer_aleatoire(y)
         for cle, nom in noms.items():
             choix = predictions_top20(resultats[cle]["modele"], X)
             lignes.append({
-                "version": version, "modele": nom, "reference": "Aleatoire",
-                "test": "McNemar unilateral sur vrais oui",
-                **comparer_selections(y, choix, reference),
+                "version": version, "modele": nom, "reference": "Aleatoire moyen (100 graines)",
+                "test": "Normale unilaterale, gain moyen / SE des tirages",
+                **comparer_aleatoire(y, choix, reference),
             })
 
     # Seule comparaison entre versions : la logistique adaptee sur les memes clients.
@@ -96,11 +120,11 @@ def analyser_validation(
     })
 
     tableau = pd.DataFrame(lignes)
-    tableau["p_holm"] = corriger_holm(tableau["p_brute"])
-    tableau["gain_detecte_5pct"] = (tableau["gain_precision"] > 0) & (tableau["p_holm"] < .05)
-    affichage = tableau[["version", "modele", "reference", "gain_precision", "p_brute", "p_holm"]].copy()
-    for col in ("p_brute", "p_holm"):
-        affichage[col] = affichage[col].map(lambda p: f"{100*p:.4g} %")
+    tableau["gain_detecte_5pct"] = (tableau["gain_precision"] > 0) & (tableau["p_brute"] < .05)
+    affichage = tableau[["version", "modele", "reference", "gain_precision", "p_brute"]].copy()
+    affichage["p_brute"] = affichage["p_brute"].map(
+        lambda p: "< 0,0001 %" if p == 0 else f"{100*p:.4g} %"
+    )
     affichage["gain_precision"] = affichage["gain_precision"].map(lambda g: f"{100*g:+.2f} points")
     print(affichage.to_string(index=False))
     return tableau

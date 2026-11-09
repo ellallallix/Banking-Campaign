@@ -14,6 +14,7 @@ from sklearn.metrics import (
     recall_score,
 )
 from Data import y_train, X_val, y_val
+from Random import evaluer_aleatoire
 
 
 # %% Decisions de selection, sans entrainement
@@ -81,6 +82,10 @@ def evaluer_modeles(
         "savefig.facecolor": "white",
     })
     resultats = load(fichier_modeles)
+    references = {
+        "entrainement": evaluer_aleatoire(y_train),
+        "validation": evaluer_aleatoire(y_val),
+    }
     lignes = []
     lignes_parametres = []
     noms = {
@@ -116,7 +121,7 @@ def evaluer_modeles(
         texte_parametres = "\n".join(
             fill(f"{cle.removeprefix('model__')} = {valeur}", width=75)
             for cle, valeur in (parametres or {}).items()
-        ) or "Aucun paramètre ajusté (graine fixée à 42)"
+        ) or "100 tirages : graines 0 à 99 ; matrice de référence : graine 42"
         lignes_parametres.append([titre, texte_parametres])
 
         # Les predictions d'entrainement ont deja ete conservees.
@@ -128,7 +133,8 @@ def evaluer_modeles(
         maximum = max(cm_train.max(), cm_val.max(), 1)
         fig, axes = plt.subplots(1, 2, figsize=(11, 5), layout="constrained")
         fig.suptitle(
-            f"{titre}\nSélection de 20 % des clients",
+            f"{titre}\nSélection de 20 % des clients"
+            + (" — tirage de référence, graine 42" if nom == "aleatoire" else ""),
             fontsize=16, fontweight="bold",
         )
         affichages = []
@@ -180,13 +186,27 @@ def evaluer_modeles(
         else:
             print("Aucun historique de cout enregistre pour ce modele.")
 
-        lignes.append({
+        ligne = {
             "Modele": titre,
             "Precision entrainement": precision_score(y_train, pred_train, zero_division=0),
             "Recall entrainement": recall_score(y_train, pred_train, zero_division=0),
             "Precision validation": precision_score(y_val, pred_val, zero_division=0),
             "Recall validation": recall_score(y_val, pred_val, zero_division=0),
-        })
+        }
+        for periode, reference in references.items():
+            if nom == "aleatoire":
+                ligne[f"Precision {periode}"] = reference["precision_moyenne"]
+                ligne[f"Recall {periode}"] = reference["rappel_moyen"]
+            ligne[f"Ecart-type precision {periode}"] = (
+                reference["precision_ecart_type"] if nom == "aleatoire" else 0.0
+            )
+            ligne[f"Ecart-type rappel {periode}"] = (
+                reference["rappel_ecart_type"] if nom == "aleatoire" else 0.0
+            )
+        ligne["Gain precision validation"] = (
+            ligne["Precision validation"] - references["validation"]["precision_moyenne"]
+        )
+        lignes.append(ligne)
 
     # Comparaison des performances
     comparaison = pd.DataFrame(lignes).set_index("Modele")
@@ -197,26 +217,36 @@ def evaluer_modeles(
     ))
 
     # Version visuelle du meme tableau, avec des valeurs exprimees en pourcentage.
-    fig_tableau, ax = plt.subplots(figsize=(13, 3.5))
+    fig_tableau, ax = plt.subplots(figsize=(17, 4.5))
     ax.axis("off")
     ax.set_title("Comparaison des modèles", loc="left", fontsize=17, pad=24)
     ax.text(
-        0, 1.02, "Précision et rappel pour une sélection de 20 % des clients",
+        0, 1.02, "Sélection de 20 % des clients ; aléatoire : moyenne ± écart-type sur 100 graines (0 à 99)",
         transform=ax.transAxes, color="#64748b", fontsize=11,
     )
-    valeurs = [
-        [nom_modele] + [f"{valeur:.2%}" for valeur in ligne]
-        for nom_modele, ligne in comparaison.iterrows()
-    ]
+    mesures = ["Precision entrainement", "Recall entrainement",
+               "Precision validation", "Recall validation"]
+    dispersions = ["Ecart-type precision entrainement", "Ecart-type rappel entrainement",
+                   "Ecart-type precision validation", "Ecart-type rappel validation"]
+    valeurs = []
+    for nom_modele, ligne in comparaison.iterrows():
+        valeurs.append(
+            [nom_modele] + [
+                f"{ligne[col]:.2%}" + (f" ± {ligne[std]:.2%}" if nom_modele == "Aléatoire" else "")
+                for col, std in zip(mesures, dispersions)
+            ] + [f"{100*ligne['Gain precision validation']:+.2f}"]
+        )
     tableau = ax.table(
         cellText=valeurs,
         colLabels=["Modèle", "Précision\nEntraînement", "Rappel\nEntraînement",
-                   "Précision\nValidation", "Rappel\nValidation"],
+                   "Précision\nValidation", "Rappel\nValidation", "Gain validation\n(points)"],
         cellLoc="center", colLoc="center",
-        colWidths=[0.32, 0.17, 0.17, 0.17, 0.17],
+        colWidths=[0.28, 0.15, 0.15, 0.15, 0.15, 0.12],
         bbox=[0, 0.04, 1, 0.84],
     )
     styliser_tableau(tableau, couleurs_lignes)
+    ax.text(0, -.07, "Gain = précision de validation − précision moyenne de l’aléatoire.",
+            transform=ax.transAxes, fontsize=10, color="#64748b")
     fig_tableau.tight_layout()
     fig_tableau.savefig(
         dossier_plots / "comparaison_precision_recall.png", dpi=300, bbox_inches="tight"
