@@ -1,7 +1,7 @@
 # %% Imports — aucune lecture du jeu de test
 import numpy as np
 import pandas as pd
-from scipy.stats import binomtest, norm
+from scipy.stats import norm
 from joblib import load
 from Random import evaluer_aleatoire
 
@@ -28,9 +28,6 @@ def comparer_selections(y, choix, reference):
     gain_precision = (gagnes - perdus) / k
     p_normale = (float(norm.sf(gain_precision / erreur_standard))
                  if erreur_standard > 0 else (1.0 if moyenne == 0 else None))
-    # Version unilaterale du test exact de McNemar sur la capture des vrais oui.
-    p_exacte = (float(binomtest(gagnes, gagnes + perdus, .5, alternative="greater").pvalue)
-               if gagnes + perdus else 1.0)
     marge = float(norm.ppf(.975) * erreur_standard)
     return {
         "clients": len(y), "oui": m, "selectionnes": k,
@@ -43,7 +40,7 @@ def comparer_selections(y, choix, reference):
         "gain_rappel": moyenne, "gain_precision": gain_precision,
         "erreur_standard_gain_precision": float(erreur_standard),
         "ic95_bas": gain_precision - marge, "ic95_haut": gain_precision + marge,
-        "p_normale_approx": p_normale, "p_brute": p_exacte,
+        "p_normale_approx": p_normale, "p_brute": p_normale,
     }
 
 
@@ -115,7 +112,7 @@ def analyser_validation(
     reference = predictions_top20(initial["logistique_adaptee"]["modele"], X_initial_commun)
     lignes.append({
         "version": "Comparaison des versions", "modele": "Logistique adaptee simplifiee",
-        "reference": "Logistique adaptee initiale", "test": "McNemar unilateral sur vrais oui",
+        "reference": "Logistique adaptee initiale", "test": "Normale unilaterale, gain / SE appariee",
         **comparer_selections(y_simple, choix, reference),
     })
 

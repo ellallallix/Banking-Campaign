@@ -97,7 +97,7 @@ L'exploration descriptive a porté sur l'ensemble du fichier ; les scores prédi
 
 | Modèle | Paramètres explorés par CV |
 |---|---|
-| Aléatoire | Sélection uniforme de 20 % des positions, sans remise ; évaluation sur 100 graines |
+| Aléatoire | Sélection uniforme de 20 % des positions, sans remise |
 | SVM RBF | `C` et `gamma` : `[0.01, 0.1, 1, 10]` ; `class_weight="balanced"` |
 | SVM polynomial | `degree` : `[2, 3, 4]` ; `coef0` : `[10, 20]` ; `class_weight="balanced"` |
 | Logistique classique | `alpha` : `[0.005, 0.01, 0.1, 0.5]` ; `n_iterations` : `[500, 1000, 2500, 5000]` |
@@ -128,9 +128,7 @@ $$
 \text{Rappel}=\frac{\text{souscripteurs sélectionnés}}{\text{tous les souscripteurs de l'ensemble évalué}}.
 $$
 
-La référence aléatoire est évaluée sur **100 tirages, avec les graines 0 à 99**. Chaque tirage sélectionne exactement $k=\lceil0{,}2n\rceil$ clients, sans remise. Pour la précision et le rappel, les comparatifs affichent la **moyenne ± l'écart-type** des 100 scores, calculés séparément sur chaque ensemble. L'écart-type utilise `ddof=1`.
-
-`predict_random(X, seed=42)` conserve le tirage historique quand aucune graine n'est précisée ; une autre graine produit un autre tirage. Les **matrices de confusion aléatoires gardent le tirage de référence de graine 42**, indiqué sur les figures. Les prédictions ne sont jamais moyennées pour fabriquer une sélection.
+La référence aléatoire sélectionne uniformément 20 % des clients, sans remise. Ses performances sont estimées à partir de plusieurs sélections indépendantes, pour limiter l'effet d'une sélection particulièrement favorable ou défavorable. Les comparatifs présentent la **moyenne ± l'écart-type** de sa précision et de son rappel, séparément sur chaque ensemble. Les matrices de confusion montrent une sélection de référence, identifiée par la graine 42.
 
 Dans les matrices de confusion, « Oui » sur l'axe horizontal signifie **client sélectionné**. Les figures ci-dessous présentent à la fois l'entraînement et la validation.
 
@@ -191,25 +189,44 @@ Je cherche à mesurer :
 1. Le gain de chaque modèle appris face à l'aléatoire, dans chacune des deux versions.
 2. Le gain de la régression adaptée simplifiée face à la non simplifiée, sur les mêmes clients.
 
-Le **gain est la précision du modèle moins la précision moyenne des 100 tirages aléatoires**, en points de pourcentage. Les prédictions sont recalculées depuis les données et modèles sauvegardés, sur les mêmes clients et avec le même quota. Les **p-values brutes sont présentées en pourcentage**.
+Le **gain est la différence de précision entre le modèle et sa référence**, en points de pourcentage. Face à l'aléatoire, j'utilise sa précision moyenne présentée dans l'évaluation. Pour les deux versions adaptées, la comparaison porte sur leurs clients communs, avec le même quota de sélection. Les **p-values brutes sont présentées en pourcentage**.
 
 ![Gains de précision, p-values et choix final](Resultats/Statistiques/Tableau_recapitulatif.png)
 
 ### Calculs utilisés
 
-Pour chaque graine $i$, je calcule le gain $g_i=P_{\mathrm{modèle}}-P_{\mathrm{aléatoire},i}$. Avec $B=100$ tirages, je calcule sa moyenne $\bar g$, son écart-type $s_g$ et son erreur standard :
+Je cherche à savoir si le gain moyen est positif : $H_0$ correspond à un gain nul ou négatif, et $H_1$ à un gain positif. J'utilise une **approximation normale**, avec une p-value unilatérale dans le sens d'une amélioration.
+
+Les différences étudiées dépendent de la comparaison :
+
+- **Face à l'aléatoire**, chaque différence vaut $g_i=P_{\mathrm{modèle}}-P_{\mathrm{référence},i}$, à partir des précisions de référence obtenues lors de l'évaluation. La précision du modèle est fixe : la moyenne des différences est donc sa précision moins la précision moyenne de la référence. La SE concerne ici l'estimation de cette référence moyenne, pour le modèle et les clients évalués.
+- **Entre les deux versions adaptées**, je compare les décisions sur chaque vrai souscripteur commun. La différence $d_i$ vaut +1 si seule la simplifiée le sélectionne, −1 si seule l'initiale le sélectionne, et 0 si leurs décisions sont identiques. Avec $M$ souscripteurs et $k$ clients sélectionnés par version, je définis $g_i=(M/k)d_i$ : la moyenne de ces contributions donne le gain de précision de la simplifiée face à l'initiale.
+
+À partir des $n$ différences, je calcule la moyenne, l'écart-type et l'erreur standard de la moyenne :
 
 $$
-\bar g=\frac{1}{B}\sum_i g_i,
+\bar g=\frac{1}{n}\sum_{i=1}^{n}g_i,
 \qquad
-s_g=\sqrt{\frac{\sum_i(g_i-\bar g)^2}{B-1}},
+s_g=\sqrt{\frac{\sum_{i=1}^{n}(g_i-\bar g)^2}{n-1}},
 \qquad
-SE=\frac{s_g}{\sqrt B}.
+SE=\frac{s_g}{\sqrt n}.
 $$
 
-Pour les comparaisons à l'aléatoire, je conserve l'approximation normale : sous l'hypothèse d'un gain moyen nul, la p-value unilatérale vaut $1-\Phi(\bar g/SE)$. L'intervalle approché est $\bar g\pm1{,}96\,SE$. La SE et cet intervalle décrivent la variabilité de la moyenne liée aux graines, pour le modèle et les clients fixés ; ils ne mesurent pas l'incertitude sur de nouveaux clients. Multiplier les tirages réduit cette SE.
+L'écart-type mesure la dispersion des différences ; la SE mesure la précision de l'estimation de leur moyenne. Pour comparer les versions, $n=M$. Le dénominateur $n-1$ correspond au calcul de l'écart-type avec `ddof=1`.
 
-La comparaison entre les deux versions adaptées reste inchangée : pour chaque vrai souscripteur, $d$ vaut +1 si seule la simplifiée le retrouve, −1 si seule l'initiale le retrouve, et 0 sinon. Avec $M$ vrais souscripteurs et $k$ clients sélectionnés, le gain vaut $(M/k)\bar d$ et sa SE approchée vaut $(M/k)s_d/\sqrt M$. La p-value repose ici sur le test binomial exact des désaccords, ou test de McNemar unilatéral.
+Je rapporte ensuite le gain moyen à sa SE. Sous l'hypothèse d'un gain moyen nul, la statistique est approximée par une loi normale centrée réduite :
+
+$$
+z=\frac{\bar g}{SE},
+\qquad
+p=1-\Phi(z),
+$$
+
+où $\Phi$ est la fonction de répartition de cette loi. La p-value est l'aire à droite de $z$ : sous $H_0$ et les hypothèses de l'approximation, elle mesure la probabilité d'obtenir une statistique au moins aussi favorable au modèle. Un gain positif élevé par rapport à sa SE donne une petite p-value.
+
+L'intervalle à 95 % est approché par $\bar g\pm1{,}96\,SE$. Les calculs se font en proportions ; le gain, son écart-type, sa SE et les bornes de l'intervalle sont multipliés par 100 pour être présentés en points de pourcentage.
+
+Pour les deux versions adaptées, le gain de la simplifiée est de **−0,31 point**, avec une p-value de **62,33 %** et un intervalle de **[−2,26 ; +1,63] points**. Ces résultats ne mettent pas en évidence un gain positif de la simplification.
 
 <details>
 <summary>Voir les calculs détaillés et les formules</summary>

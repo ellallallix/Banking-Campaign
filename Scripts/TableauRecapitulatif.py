@@ -60,7 +60,7 @@ def enregistrer_tableau(tableau, dossier_resultats="../Resultats/Statistiques"):
         dessiner_tableau(axes[1], ligne_versions,
                         ["Comparaison", "Gain (points)", "p-value (%)", "IC 95 % du gain (points)"],
                         [.46, .14, .14, .26], ["#c2410c"])
-        fig.text(.06, .09, "Gain = précision du modèle − précision moyenne aléatoire (100 graines, 0 à 99). p-values brutes, sans correction.",
+        fig.text(.06, .09, "Gain = précision du modèle − précision moyenne aléatoire (100 graines, 0 à 99). p-values normales brutes, sans correction.",
                  color="#475569", fontsize=10)
         fig.text(.06, .055, "Choix final : régression logistique adaptée, données non simplifiées.",
                  color="#c2410c", fontweight="bold", fontsize=11)
@@ -88,7 +88,7 @@ def enregistrer_tableau(tableau, dossier_resultats="../Resultats/Statistiques"):
                         ["Modèle / version", "Précision aléatoire\nmoyenne ± écart-type (%)", "Gain moyen\n(points)",
                          "Écart-type s\ndes gains (points)", "SE du gain\n(points)", "IC 95 % gain\n(points)", "p normale brute\n(%)"],
                         [.24, .20, .10, .12, .10, .14, .10])
-        axes[1].set_title("Comparaison des versions adaptées : calcul apparié inchangé, sur les mêmes clients",
+        axes[1].set_title("Comparaison des versions adaptées : approximation normale sur les mêmes clients",
                           loc="left", fontsize=11, pad=14)
         r = versions
         dessiner_tableau(axes[1], [["Simplifiée − non simplifiée", f"{int(r.gagnes)} / {int(r.perdus)}",
@@ -96,10 +96,10 @@ def enregistrer_tableau(tableau, dossier_resultats="../Resultats/Statistiques"):
                                    f"{100*r.erreur_standard_gain_precision:.3f}",
                                    f"{100*r.gain_precision:+.2f}", pourcentage_p(r.p_brute)]],
                         ["Comparaison", "Oui gagnés\n/ perdus", "Moyenne d", "Écart-type d", "SE (points)",
-                         "Gain (points)", "p exacte brute (%)"], [.28, .14, .11, .11, .12, .10, .14])
+                         "Gain (points)", "p normale brute (%)"], [.28, .14, .11, .11, .12, .10, .14])
         fig.text(.055, .155, "Aléatoire : gᵢ = précision du modèle − précision du tirage i ; gain = moyenne(gᵢ) ; s = écart-type(gᵢ), ddof=1 ; SE = s / √100.", fontsize=10, color="#334155")
         fig.text(.055, .12, "p normale = P(Z ≥ gain / SE). IC 95 % ≈ gain ± 1,96 × SE. Ces calculs décrivent la variation entre tirages, conditionnellement au modèle et aux clients fixés.", fontsize=10, color="#334155")
-        fig.text(.055, .085, "Versions : d = +1 / −1 / 0 selon la capture de chaque vrai Oui ; gain = (M/k) × moyenne(d) ; SE = (M/k) × écart-type(d) / √M. p : McNemar unilatéral.", fontsize=10, color="#334155")
+        fig.text(.055, .085, "Versions : d = +1 / −1 / 0 selon la capture de chaque vrai Oui ; gain = (M/k) × moyenne(d) ; SE = (M/k) × écart-type(d) / √M ; p normale avec gain / SE.", fontsize=10, color="#334155")
         fig.text(.055, .05, "M = nombre de vrais Oui ; k = nombre de clients sélectionnés. Analyse exploratoire ; une absence de gain détecté ne prouve pas l’équivalence.", fontsize=10, color="#64748b")
         fig.tight_layout(rect=(.04, .20, .99, .93), h_pad=2)
         chemin_calculs = dossier / "Calculs_statistiques.png"
